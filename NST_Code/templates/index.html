@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AdaIN Style Transfer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f0f0f;
+      color: #f0f0f0;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 {
+      font-size: 2.5rem;
+      text-align: center;
+      margin-bottom: 10px;
+      background: linear-gradient(90deg, #a78bfa, #60a5fa);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    p.subtitle {
+      text-align: center;
+      color: #888;
+      margin-bottom: 40px;
+    }
+    .upload-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 30px;
+    }
+    .upload-box {
+      background: #1a1a1a;
+      border: 2px dashed #333;
+      border-radius: 16px;
+      padding: 24px;
+      text-align: center;
+    }
+    .upload-box label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #ddd;
+    }
+    .upload-box img {
+      width: 100%;
+      max-height: 300px;
+      object-fit: contain;
+      border-radius: 10px;
+      margin: 12px 0;
+      display: none;
+    }
+    .upload-box img.show { display: block; }
+    input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #333;
+      background: #222;
+      color: #fff;
+      border-radius: 8px;
+    }
+    .controls {
+      background: #1a1a1a;
+      border-radius: 16px;
+      padding: 30px;
+      margin-bottom: 30px;
+    }
+    .controls label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      color: #aaa;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: #a78bfa;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(90deg, #a78bfa, #60a5fa);
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    button:hover { opacity: 0.9; }
+    .result {
+      background: #1a1a1a;
+      border-radius: 16px;
+      padding: 30px;
+      text-align: center;
+      display: none;
+    }
+    .result.show { display: block; }
+    .result img {
+      width: 100%;
+      max-width: 800px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+    .result a {
+      display: inline-block;
+      padding: 10px 24px;
+      background: #333;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+    }
+    .error {
+      background: #441111;
+      border: 1px solid #882222;
+      color: #ffaaaa;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .spinner {
+      display: none;
+      text-align: center;
+      margin-top: 20px;
+      color: #888;
+    }
+    .spinner.show { display: block; }
+    @media (max-width: 768px) {
+      .upload-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Neural Style Transfer</h1>
+    <p class="subtitle">Upload a content image and a style image to create artistic results</p>
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" enctype="multipart/form-data" id="uploadForm">
+      <div class="upload-grid">
+        <div class="upload-box">
+          <label>Content Image</label>
+          <input type="file" name="content" accept="image/*" id="contentInput" onchange="previewImage('contentInput', 'contentPreview')">
+          <img id="contentPreview" {% if content_image %}src="{{ url_for('send_image', filename=content_image) }}" class="show"{% endif %}>
+          <input type="hidden" name="content_path" value="{{ content_image or '' }}">
+        </div>
+
+        <div class="upload-box">
+          <label>Style Image</label>
+          <input type="file" name="style" accept="image/*" id="styleInput" onchange="previewImage('styleInput', 'stylePreview')">
+          <img id="stylePreview" {% if style_image %}src="{{ url_for('send_image', filename=style_image) }}" class="show"{% endif %}>
+          <input type="hidden" name="style_path" value="{{ style_image or '' }}">
+        </div>
+      </div>
+
+      <div class="controls">
+        <label>
+          Style Strength
+          <span id="alphaVal">{{ alpha }}</span>
+        </label>
+        <input type="range" name="alpha" id="alphaRange" min="0" max="1" step="0.1" value="{{ alpha }}" oninput="document.getElementById('alphaVal').textContent = this.value">
+        <button type="submit" onclick="document.getElementById('spinner').classList.add('show')">Generate Styled Image</button>
+      </div>
+    </form>
+
+    <div class="spinner" id="spinner">⏳ Processing...</div>
+
+    {% if result_image %}
+    <div class="result show">
+      <h2>Result</h2>
+      <img src="{{ url_for('send_image', filename=result_image) }}" alt="Stylized output">
+      <br>
+      <a href="{{ url_for('send_image', filename=result_image) }}" download>⬇ Download</a>
+    </div>
+    {% endif %}
+  </div>
+
+  <script>
+    function previewImage(inputId, previewId) {
+      const input = document.getElementById(inputId);
+      const preview = document.getElementById(previewId);
+      const file = input.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          preview.src = reader.result;
+          preview.classList.add('show');
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  </script>
+</body>
+</html>
