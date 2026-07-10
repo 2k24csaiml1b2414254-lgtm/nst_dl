@@ -28,8 +28,8 @@ decoder.load_state_dict(torch.load(DECODER_PATH, map_location=DEVICE))
 decoder.eval()
 
 transform = transforms.Compose([
-    transforms.Resize(512),
-    transforms.CenterCrop(512),
+    transforms.Resize(256),
+    transforms.CenterCrop(256),
     transforms.ToTensor(),
 ])
 
